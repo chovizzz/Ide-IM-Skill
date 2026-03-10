@@ -1,0 +1,241 @@
+name: ai-review (cursor)
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ai-review-cursor-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cursor_review:
+    runs-on: ubuntu-latest
+    if: ${{ vars.BOT_DISABLED != 'true' }}
+    steps:
+      - name: Gate + resolve PR number
+        id: gate
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            // Trigger conditions:
+            // - Comment on PR includes "/ai review"
+            // - OR PR labeled with "ai-review"
+            let prNumber = null;
+            let trigger = null;
+
+            if (context.eventName === 'issue_comment') {
+              const issue = context.payload.issue;
+              if (!issue?.pull_request) return '';
+              const body = (context.payload.comment?.body || '').trim();
+              if (!/^\/ai\s+review\b/i.test(body)) return '';
+              prNumber = issue.number;
+              trigger = 'comment';
+            } else if (context.eventName === 'pull_request') {
+              const label = context.payload.label?.name || '';
+              if (label !== 'ai-review') return '';
+              prNumber = context.payload.pull_request?.number;
+              trigger = 'label';
+            }
+
+            if (!prNumber) return '';
+
+            // Security gate: only allow trusted actors to trigger the AI review.
+            // For label trigger, rely on repo permissions (only maintainers can add labels).
+            if (trigger === 'comment') {
+              const assoc = context.payload.comment?.author_association || 'NONE';
+              const isTrusted = ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(assoc);
+              if (!isTrusted) return '';
+            }
+
+            return String(prNumber);
+
+      - name: Stop if not eligible
+        if: ${{ steps.gate.outputs.result == '' }}
+        run: echo "Not eligible / not a trigger."
+
+      - name: Fetch PR metadata + diff
+        if: ${{ steps.gate.outputs.result != '' }}
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = Number(process.env.PR_NUMBER);
+            const prResp = await github.rest.pulls.get({ owner, repo, pull_number });
+            const pr = prResp.data;
+
+            // Do NOT run for fork PRs by default (secrets would be unavailable anyway).
+            if (pr.head?.repo?.full_name !== `${owner}/${repo}`) {
+              core.setOutput('skip', 'true');
+              core.setOutput('reason', 'fork');
+              core.setOutput('html_url', pr.html_url);
+              return;
+            }
+
+            // Download diff via GitHub API (no checkout, no executing PR code)
+            const diffResp = await github.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
+              owner,
+              repo,
+              pull_number,
+              headers: { accept: 'application/vnd.github.v3.diff' },
+            });
+
+            core.setOutput('skip', 'false');
+            core.setOutput('html_url', pr.html_url);
+            core.setOutput('title', pr.title || '');
+            core.setOutput('author', pr.user?.login || '');
+            core.setOutput('base', pr.base?.ref || '');
+            core.setOutput('head', pr.head?.ref || '');
+
+            // Save diff to a file for the next step.
+            const fs = require('fs');
+            fs.writeFileSync('pr.diff', diffResp.data || '', 'utf8');
+        env:
+          PR_NUMBER: ${{ steps.gate.outputs.result }}
+
+      - name: Comment on fork PR (manual only)
+        if: ${{ steps.gate.outputs.result != '' && steps.pr.outputs.skip == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = Number(process.env.PR_NUMBER);
+            const body = [
+              `我看到了 \`/ai review\` 请求，但这个 PR 来自 fork。为避免泄露密钥，CI 不会在 fork PR 上运行 Cursor AI 审查。`,
+              ``,
+              `建议做法：`,
+              `- 维护者本地拉取分支后用 Cursor 进行审查，或`,
+              `- 将贡献者加入协作者/改为同仓库分支 PR。`,
+            ].join('\\n');
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+        env:
+          PR_NUMBER: ${{ steps.gate.outputs.result }}
+
+      - name: Install Cursor CLI (agent)
+        if: ${{ steps.gate.outputs.result != '' && steps.pr.outputs.skip == 'false' }}
+        run: |
+          set -euo pipefail
+          curl -fsS https://cursor.com/install | bash
+          if command -v agent >/dev/null 2>&1; then
+            agent --version || true
+          else
+            echo "Cursor agent CLI not found after install."
+            exit 1
+          fi
+
+      - name: Run Cursor AI review
+        if: ${{ steps.gate.outputs.result != '' && steps.pr.outputs.skip == 'false' }}
+        id: review
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CURSOR_API_KEY:-}" ]; then
+            echo "Missing CURSOR_API_KEY secret."
+            exit 2
+          fi
+
+          node <<'NODE'
+          const fs = require('fs');
+          const { spawnSync } = require('child_process');
+
+          const diff = fs.readFileSync('pr.diff', 'utf8');
+          const MAX = 200_000; // safety cap
+          const clipped = diff.length > MAX ? diff.slice(0, MAX) + "\n\n[...diff truncated...]" : diff;
+
+          const prompt = [
+            "你是一个严格的代码审查员。请基于下面 PR diff 给出审查结果：",
+            "",
+            "输出要求：",
+            "1) 先给一个结论：PASS / NEEDS_CHANGES / BLOCKED",
+            "2) 列出 3-10 条具体建议（带文件路径与行/片段引用，尽量可执行）",
+            "3) 标出安全/权限/密钥相关风险（如果有）",
+            "4) 给一个最小测试计划（要跑哪些命令/验证哪些路径）",
+            "",
+            "PR DIFF：",
+            "```diff",
+            clipped,
+            "```",
+          ].join("\n");
+
+          // Prefer stream-json for stability; fall back to plain stdout.
+          const args = [
+            "-p", prompt,
+            "--trust",
+            "--mode", "code",
+            "--output-format", "stream-json",
+            "--stream-partial-output",
+          ];
+
+          const proc = spawnSync("agent", args, { encoding: "utf8", maxBuffer: 50 * 1024 * 1024 });
+          const out = (proc.stdout || "");
+          const err = (proc.stderr || "");
+
+          // Parse NDJSON and extract any assistant text-like fields.
+          let text = "";
+          for (const line of out.split(/\r?\n/)) {
+            if (!line.trim()) continue;
+            try {
+              const obj = JSON.parse(line);
+              // Common fields across stream formats
+              const candidates = [
+                obj?.delta,
+                obj?.text,
+                obj?.content,
+                obj?.message?.content,
+              ];
+              for (const c of candidates) {
+                if (typeof c === "string" && c) text += c;
+              }
+            } catch {
+              // ignore non-json lines
+            }
+          }
+
+          if (!text.trim()) {
+            // Fallback: if stream-json parsing fails, return raw stdout (trimmed)
+            text = out.trim();
+          }
+
+          // Last resort: surface stderr if still empty
+          if (!text.trim() && err.trim()) text = `ERROR:\n${err.trim()}`;
+
+          fs.writeFileSync("review.md", text.trim() + "\n", "utf8");
+          NODE
+
+      - name: Post review back to PR
+        if: ${{ steps.gate.outputs.result != '' && steps.pr.outputs.skip == 'false' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = Number(process.env.PR_NUMBER);
+            const review = fs.readFileSync('review.md', 'utf8').trim();
+
+            const marker = '<!-- ide-im-bot:cursor-ai-review:v1 -->';
+            const body = [
+              marker,
+              `### Cursor AI Review`,
+              ``,
+              review,
+              ``,
+              `（触发方式：\`/ai review\` 或 label \`ai-review\`；仅成员/协作者可触发；fork PR 默认不运行。）`,
+            ].join('\\n');
+
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+        env:
+          PR_NUMBER: ${{ steps.gate.outputs.result }}
+

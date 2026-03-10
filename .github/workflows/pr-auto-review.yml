@@ -1,0 +1,81 @@
+name: pr-auto-review
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-auto-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr_checklist_comment:
+    runs-on: ubuntu-latest
+    if: ${{ vars.BOT_DISABLED != 'true' }}
+    steps:
+      - name: Post PR checklist (safe, no secrets)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Support both pull_request event and issue_comment event on PRs.
+            let prNumber = null;
+            let commentBody = '';
+            if (context.eventName === 'pull_request') {
+              prNumber = context.payload.pull_request?.number;
+            } else if (context.eventName === 'issue_comment') {
+              const issue = context.payload.issue;
+              if (!issue?.pull_request) return; // not a PR
+              prNumber = issue.number;
+              commentBody = (context.payload.comment?.body || '').trim();
+            }
+            if (!prNumber) return;
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const pr = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (pr.data.draft) return;
+
+            // Gate heavy actions behind explicit command or label.
+            // This job is intentionally "light" and only posts a checklist once.
+            const labels = (pr.data.labels || []).map(l => l.name).filter(Boolean);
+            const marker = '<!-- ide-im-bot:pr-checklist:v1 -->';
+
+            // Avoid spamming: only post once.
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            if (comments.some(c => (c.body || '').includes(marker))) return;
+
+            const body = [
+              `我会自动跟进这个 PR。合并前建议你确认：`,
+              ``,
+              `- [ ] 变更目的清晰（why > what），包含必要上下文`,
+              `- [ ] 本地已跑：\`npm test\` / \`npm run typecheck\` / 关键链路手动验证`,
+              `- [ ] 如果改了桥接 runtime / 进程管理脚本，确认 \`./scripts/doctor.sh\` 输出正常`,
+              `- [ ] 没有提交任何 token / 密钥（\`config.env\` 不进仓库）`,
+              ``,
+              `如果需要我做更深入的自动审查（可能更耗时/更贵），维护者可以：`,
+              `- 给 PR 加 label：\`ai-review\`，或`,
+              `- 评论命令：\`/ai review\`（会触发 Cursor CLI 的 AI 审查并回贴到 PR）`,
+              ``,
+              `（当前仓库默认只做“安全的轻量动作”，不会在 CI 里执行不受信代码。）`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: prNumber,
+              body: `${marker}\n${body}`,
+            });
+

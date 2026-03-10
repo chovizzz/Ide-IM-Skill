@@ -1,0 +1,100 @@
+name: notify-on-approval
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: notify-on-approval-${{ github.event.pull_request.number || github.event.review.pull_request_url }}
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: ${{ vars.BOT_DISABLED != 'true' }}
+    steps:
+      - name: Build notification payload
+        id: payload
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Determine PR and state
+            let pr = null;
+            let kind = null;
+            let reviewer = null;
+
+            if (context.eventName === 'pull_request_review') {
+              const review = context.payload.review;
+              const prNumber = context.payload.pull_request?.number;
+              if (!prNumber) return '';
+              if ((review?.state || '').toLowerCase() !== 'approved') return '';
+              kind = 'approved';
+              reviewer = review?.user?.login || null;
+              const prResp = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+              pr = prResp.data;
+            } else if (context.eventName === 'pull_request') {
+              const prPayload = context.payload.pull_request;
+              if (!prPayload?.number) return '';
+              if (!prPayload.merged) return '';
+              kind = 'merged';
+              const prResp = await github.rest.pulls.get({ owner, repo, pull_number: prPayload.number });
+              pr = prResp.data;
+            }
+
+            if (!pr) return '';
+
+            // Optional: only notify for main branch merges/approvals if configured
+            const onlyBase = (process.env.ONLY_BASE_BRANCH || '').trim();
+            if (onlyBase && pr.base?.ref !== onlyBase) return '';
+
+            const title = pr.title || `(no title)`;
+            const url = pr.html_url;
+            const author = pr.user?.login || 'unknown';
+            const base = pr.base?.ref || 'unknown';
+            const head = pr.head?.ref || 'unknown';
+
+            const textLines = [];
+            if (kind === 'approved') {
+              textLines.push(`✅ PR 已通过审核（Approved）`);
+            } else {
+              textLines.push(`🚀 PR 已合并（Merged）`);
+            }
+            textLines.push(`Repo: ${owner}/${repo}`);
+            textLines.push(`PR: #${pr.number} ${title}`);
+            textLines.push(`作者: ${author}`);
+            if (reviewer) textLines.push(`审核: ${reviewer}`);
+            textLines.push(`分支: ${head} → ${base}`);
+            textLines.push(`链接: ${url}`);
+
+            // Discord webhook expects JSON { content }
+            return JSON.stringify({ content: textLines.join('\n') });
+
+        env:
+          ONLY_BASE_BRANCH: ${{ vars.BOT_NOTIFY_ONLY_BASE_BRANCH }}
+
+      - name: Send Discord webhook
+        if: ${{ steps.payload.outputs.result != '' }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PAYLOAD: ${{ steps.payload.outputs.result }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Missing secrets.DISCORD_WEBHOOK_URL"
+            exit 1
+          fi
+          curl -fsS -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$DISCORD_WEBHOOK_URL"
+

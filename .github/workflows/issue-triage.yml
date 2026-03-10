@@ -1,0 +1,89 @@
+name: issue-triage
+
+on:
+  issues:
+    types: [opened, reopened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    if: ${{ vars.BOT_DISABLED != 'true' }}
+    steps:
+      - name: Triage + template reply
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const isIssue = !!context.payload.issue && !context.payload.pull_request;
+            if (!isIssue) return;
+
+            const issue = context.payload.issue;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Only do automatic actions for repo members/collaborators by default.
+            // You can override by adding label `allow-bot` or setting vars.BOT_PUBLIC_TRIAGE=true.
+            const assoc = issue.author_association || 'NONE';
+            const publicTriage = (process.env.BOT_PUBLIC_TRIAGE || '').toLowerCase() === 'true';
+            const labels = (issue.labels || []).map(l => (typeof l === 'string' ? l : l.name)).filter(Boolean);
+            const hasAllowLabel = labels.includes('allow-bot');
+            const isTrustedAuthor = ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(assoc);
+            if (!isTrustedAuthor && !publicTriage && !hasAllowLabel) return;
+
+            // Add a baseline label.
+            if (!labels.includes('needs-triage')) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: issue.number,
+                labels: ['needs-triage'],
+              });
+            }
+
+            // If this is a comment trigger, only react to explicit commands.
+            if (context.eventName === 'issue_comment') {
+              const body = (context.payload.comment?.body || '').trim();
+              if (!/^\/ai\s+triage\b/i.test(body)) return;
+            }
+
+            const body = [
+              `收到，我先按模板把信息补齐，方便快速定位：`,
+              ``,
+              `- 你期望的行为是什么？实际发生了什么？`,
+              `- 复现步骤（尽量最小化）`,
+              `- 运行环境：OS / Node 版本 / Cursor 版本`,
+              `- 相关日志：\`$CTI_HOME/logs/bridge.log\`（可贴关键片段，注意打码 token）`,
+              `- 配置：请不要粘贴 token；只说明你启用的渠道与 runtime（如 discord + cursor）`,
+              ``,
+              `如果你想让机器人开始处理这个 issue，请回复：\`/ai triage\``,
+            ].join('\n');
+
+            // Avoid spamming: only post once per issue unless explicitly commanded.
+            const marker = '<!-- ide-im-bot:triage-template:v1 -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: issue.number,
+              per_page: 100,
+            });
+            if (comments.some(c => (c.body || '').includes(marker))) return;
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: `${marker}\n${body}`,
+            });
+
+        env:
+          BOT_PUBLIC_TRIAGE: ${{ vars.BOT_PUBLIC_TRIAGE }}
+
