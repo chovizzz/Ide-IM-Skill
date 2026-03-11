@@ -89,6 +89,7 @@ Ask which channels to enable: telegram, discord, feishu, qq (comma-separated). B
 For each enabled channel, use `SKILL_DIR/references/setup-guides.md`. Collect:
 - **Telegram**: Bot Token → Chat ID → Allowed User IDs (optional). At least Chat ID or Allowed Users required.
 - **Discord**: Bot Token → Allowed User IDs → Allowed Channel IDs / Guild IDs (optional). At least one of Allowed Users or Allowed Channels required.
+  - **Important**: In the Discord Developer Portal → Bot → Privileged Gateway Intents, enable **MESSAGE CONTENT INTENT**. Without it, guild messages have empty content and will be silently dropped.
   - **Require Mention** (`CTI_DISCORD_REQUIRE_MENTION`): set `true` to only respond when the bot is @mentioned in guild channels (default `false`).
   - **Group Policy** (`CTI_DISCORD_GROUP_POLICY`): `open` (default, respond to guild messages) or `disabled` (completely ignore guild messages).
 - **Feishu**: App ID → App Secret → Domain (optional) → Allowed User IDs (optional). Guide through permissions, bot, events (long connection), publish.

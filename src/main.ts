@@ -128,6 +128,14 @@ async function main(): Promise<void> {
   console.log(`[ide-im] Starting bridge (run_id: ${runId})`);
 
   const settings = configToSettings(config);
+
+  // Debug: log Discord guild-related settings so we can verify they reach the store
+  const debugKeys = ['bridge_discord_require_mention', 'bridge_discord_group_policy', 'bridge_discord_allowed_guilds'];
+  for (const k of debugKeys) {
+    const v = settings.get(k);
+    if (v !== undefined) console.log(`[ide-im] setting: ${k} = ${v}`);
+  }
+
   const jsonStore = new JsonFileStore(settings);
   const store = new IdentityMemoryStore(config.identityDir, jsonStore);
   const pendingPerms = new PendingPermissions();
