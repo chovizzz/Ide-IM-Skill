@@ -17,7 +17,7 @@
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-CTI_HOME="${CTI_HOME:-$HOME/.claude-to-im}"
+CTI_HOME="${CTI_HOME:-$HOME/.ide-im}"
 
 RUNTIME="${1:-cursor}"
 shift || true

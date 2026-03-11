@@ -2,7 +2,7 @@
  * JSON file-backed BridgeStore implementation.
  *
  * Uses in-memory Maps as cache with write-through persistence
- * to JSON files in CTI_HOME/data/ (CTI_HOME default ~/.claude-to-im).
+ * to JSON files in CTI_HOME/data/ (CTI_HOME default ~/.ide-im).
  */
 
 import fs from 'node:fs';

@@ -28,7 +28,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # ── Paths ──
-$CtiHome    = if ($env:CTI_HOME) { $env:CTI_HOME } else { Join-Path $env:USERPROFILE '.claude-to-im' }
+$CtiHome    = if ($env:CTI_HOME) { $env:CTI_HOME } else { Join-Path $env:USERPROFILE '.ide-im' }
 $SkillDir   = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $RuntimeDir = Join-Path $CtiHome 'runtime'
 $PidFile    = Join-Path $RuntimeDir 'bridge.pid'
@@ -145,7 +145,7 @@ function Install-WinSWService {
     $nodePath = Get-NodePath
     $xmlPath = Join-Path $SkillDir "$ServiceName.xml"
 
-    # Run as current user so the service can access %USERPROFILE%\.claude-to-im (or CTI_HOME) and Codex login state
+    # Run as current user so the service can access %USERPROFILE%\.ide-im (or CTI_HOME) and Codex login state
     $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     Write-Host "Service will run as: $currentUser"
     $cred = Get-Credential -UserName $currentUser -Message "Enter password for '$currentUser' (required for Windows Service logon)"
@@ -196,7 +196,7 @@ function Install-NSSMService {
     param([string]$NSSMPath)
     $nodePath = Get-NodePath
 
-    # Run as current user so the service can access %USERPROFILE%\.claude-to-im (or CTI_HOME) and Codex login state
+    # Run as current user so the service can access %USERPROFILE%\.ide-im (or CTI_HOME) and Codex login state
     $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     Write-Host "Service will run as: $currentUser"
     $cred = Get-Credential -UserName $currentUser -Message "Enter password for '$currentUser' (required for Windows Service logon)"

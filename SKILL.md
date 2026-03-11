@@ -20,7 +20,7 @@ allowed-tools:
 # Ide-IM-Skill
 
 You are managing the Ide-IM-Skill bridge (IM → AI 桥接，可在 Cursor 内启动与管理).
-User data path is controlled by **CTI_HOME** (default `~/.claude-to-im/`). 配哪个就用哪个路径。
+User data path is controlled by **CTI_HOME** (default `~/.ide-im/`). 配哪个就用哪个路径。
 
 The skill directory (SKILL_DIR) is the directory containing this SKILL.md.
 Resolve it by: Glob for `**/Ide-IM-Skill/SKILL.md` or `**/ide-im-skill/SKILL.md` and use the parent of the file's directory.
@@ -58,11 +58,11 @@ Dependencies are auto-installed on first `start` — no manual `npm install` req
 ## Runtime detection (Cursor vs others)
 
 - **Cursor** — You are in Cursor. `AskUserQuestion` may be available for interactive setup. SKILL_DIR is the folder containing this SKILL.md (e.g. Ide-IM-Skill or ide-im-skill).
-- **No AskUserQuestion** — Show `SKILL_DIR/config.env.example` and instruct the user to create `$CTI_HOME/config.env` (default `~/.claude-to-im/config.env`) manually.
+- **No AskUserQuestion** — Show `SKILL_DIR/config.env.example` and instruct the user to create `$CTI_HOME/config.env` (default `~/.ide-im/config.env`) manually.
 
 ## Config check (for `start`, `stop`, `status`, `logs`, `reconfigure`, `doctor`)
 
-If config.env does NOT exist (under CTI_HOME, default ~/.claude-to-im):
+If config.env does NOT exist (under CTI_HOME, default ~/.ide-im):
 - With AskUserQuestion: start the `setup` wizard.
 - Without: show `SKILL_DIR/config.env.example` and ask the user to create the file; do not start the daemon.
 
@@ -143,7 +143,7 @@ After CLI is verified, **automatically** create workspace directories and seed i
 Run: `bash "SKILL_DIR/scripts/init-workspace.sh" <runtime>`
 
 This creates:
-1. **CTI_HOME** dirs (`~/.claude-to-im/{data,logs,runtime,data/messages}`)
+1. **CTI_HOME** dirs (`~/.ide-im/{data,logs,runtime,data/messages}`)
 2. **Working directory** (`~/.workspace` for cursor, `$CWD` for others)
 3. **Identity directory** (cursor only: `SKILL_DIR/.workspace/` + `memory/`) — seeds OpenClaw templates (`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `MEMORY.md`) from `templates/identity-default/` if not already present
 
@@ -155,7 +155,7 @@ After init, remind the user they can personalise `USER.md` and `MEMORY.md` in th
 **Step 4 — Write config and validate**
 
 1. Summary table (secrets masked).
-2. Confirm, then: `mkdir -p "$CTI_HOME"/{data,logs,runtime,data/messages}` (CTI_HOME 未设时用 ~/.claude-to-im)
+2. Confirm, then: `mkdir -p "$CTI_HOME"/{data,logs,runtime,data/messages}` (CTI_HOME 未设时用 ~/.ide-im)
 3. Write `$CTI_HOME/config.env` (KEY=VALUE).
 4. `chmod 600 $CTI_HOME/config.env`
 5. Validate tokens per `SKILL_DIR/references/token-validation.md`
@@ -198,4 +198,4 @@ Suggest fixes; for details see `SKILL_DIR/references/troubleshooting.md`.
 
 - Mask secrets (last 4 chars only) in all output.
 - Always check config.env exists before starting the daemon.
-- Config path: CTI_HOME/config.env（未设 CTI_HOME 时为 ~/.claude-to-im/config.env）。配哪个就用哪个。
+- Config path: CTI_HOME/config.env（未设 CTI_HOME 时为 ~/.ide-im/config.env）。配哪个就用哪个。
