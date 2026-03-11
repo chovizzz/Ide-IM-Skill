@@ -103,6 +103,25 @@ For each enabled channel, use `SKILL_DIR/references/setup-guides.md`. Collect:
   - `codex` — OpenAI Codex SDK
   - `auto` — Try Claude first, fall back to Codex
   - `cursor` — Use Cursor CLI (`agent`); install: curl https://cursor.com/install -fsS | bash
+
+**Step 3a — CLI check & auto-install (immediately after runtime selection)**
+
+After the user picks a runtime, **check whether the required CLI exists** and auto-install if missing.
+
+| Runtime | CLI to check | Detection | Install command |
+|---|---|---|---|
+| `claude` | `claude` | `which claude` (macOS/Linux) / `where claude` (Windows). Prefer native 2.x (run `claude --version`; if < 2 or npm-based, warn). | `curl -fsSL https://claude.ai/install.sh \| sh` (macOS/Linux) or `irm https://claude.ai/install.ps1 \| iex` (Windows) |
+| `codex` | `codex` | `which codex` / `where codex` | `npm install -g @openai/codex` |
+| `cursor` | `agent` or `cursor` | `which agent` / `which cursor` / check `~/.cursor/bin/agent`, `~/.local/bin/agent` | `curl -fsSL https://cursor.com/install \| sh` (macOS/Linux) or `irm https://cursor.com/install.ps1 \| iex` (Windows) |
+| `auto` | check both `claude` and `codex` | see above | install whichever is missing |
+
+**Flow (use `SKILL_DIR/scripts/check-cli.sh`):**
+1. Run: `bash "SKILL_DIR/scripts/check-cli.sh" <runtime>` — outputs `found: /path (version: x)` or `not_found`.
+2. If found → show path and version, proceed.
+3. If NOT found → tell the user the CLI is missing and ask "是否自动安装？(Y/n)".
+   - If yes → run: `bash "SKILL_DIR/scripts/check-cli.sh" <runtime> --install` — attempts install then re-checks.
+   - If no → show manual install instructions and continue (the daemon will fail at start if CLI is still missing).
+4. For `auto`: the script checks both claude and codex; at least one must succeed.
 - **Working Directory**:
   - If `CTI_DEFAULT_WORKDIR` is set in `config.env`,始终优先使用它。
   - 如果未设置：
