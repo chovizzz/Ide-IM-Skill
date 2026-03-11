@@ -45,6 +45,16 @@ Extract optional numeric argument for `logs` (default 50).
 
 Before asking for platform credentials, read `SKILL_DIR/references/setup-guides.md` and present the relevant guide to the user.
 
+## Installation
+
+Install via skills.sh (no git clone needed):
+
+```
+npx skills add chovizzz/Ide-IM-Skill
+```
+
+Dependencies are auto-installed on first `start` — no manual `npm install` required.
+
 ## Runtime detection (Cursor vs others)
 
 - **Cursor** — You are in Cursor. `AskUserQuestion` may be available for interactive setup. SKILL_DIR is the folder containing this SKILL.md (e.g. Ide-IM-Skill or ide-im-skill).

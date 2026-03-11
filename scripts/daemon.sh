@@ -10,6 +10,13 @@ LOG_FILE="$CTI_HOME/logs/bridge.log"
 
 ensure_dirs() { mkdir -p "$CTI_HOME"/{data,logs,runtime,data/messages}; }
 
+ensure_deps() {
+  if [ ! -d "$SKILL_DIR/node_modules" ]; then
+    echo "Installing dependencies..."
+    (cd "$SKILL_DIR" && npm install --production 2>&1)
+  fi
+}
+
 ensure_built() {
   local need_build=0
   if [ ! -f "$SKILL_DIR/dist/daemon.mjs" ]; then
@@ -123,6 +130,7 @@ esac
 case "${1:-help}" in
   start)
     ensure_dirs
+    ensure_deps
     ensure_built
 
     # So the daemon can default identity root to skill's workspace (cursor runtime).

@@ -47,6 +47,16 @@ function Ensure-Dirs {
     }
 }
 
+function Ensure-Deps {
+    $nodeModules = Join-Path $SkillDir 'node_modules'
+    if (-not (Test-Path $nodeModules)) {
+        Write-Host "Installing dependencies..."
+        Push-Location $SkillDir
+        npm install --production
+        Pop-Location
+    }
+}
+
 function Ensure-Built {
     if (-not (Test-Path $DaemonMjs)) {
         Write-Host "Building daemon bundle..."
@@ -243,6 +253,7 @@ function Start-Fallback {
 switch ($Command) {
     'start' {
         Ensure-Dirs
+        Ensure-Deps
         Ensure-Built
 
         # Seed skill workspace with OpenClaw-style templates if missing.
