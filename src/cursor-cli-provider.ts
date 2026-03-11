@@ -54,6 +54,19 @@ export function resolveCursorAgentPath(): string | null {
   return null;
 }
 
+/** Probe `agent --help` once to discover supported flags. */
+function detectCapabilities(agentPath: string): { supportsTrust: boolean; supportsForce: boolean } {
+  try {
+    const help = execSync(`"${agentPath}" --help`, { encoding: 'utf-8', timeout: 5000 });
+    return {
+      supportsTrust: help.includes('--trust'),
+      supportsForce: help.includes('--force'),
+    };
+  } catch {
+    return { supportsTrust: false, supportsForce: false };
+  }
+}
+
 /** Map Cursor CLI --mode to agent flag */
 function toCursorMode(permissionMode?: string): string | undefined {
   if (!permissionMode) return undefined;
@@ -64,10 +77,15 @@ function toCursorMode(permissionMode?: string): string | undefined {
 }
 
 export class CursorCLIProvider implements LLMProvider {
+  private caps: { supportsTrust: boolean; supportsForce: boolean };
+
   constructor(
     private _pendingPerms: PendingPermissions,
     private agentPath: string,
-  ) {}
+  ) {
+    this.caps = detectCapabilities(agentPath);
+    console.log(`[ide-im] Cursor CLI capabilities: trust=${this.caps.supportsTrust}, force=${this.caps.supportsForce}`);
+  }
 
   streamChat(params: StreamChatParams): ReadableStream<string> {
     const self = this;
@@ -92,8 +110,10 @@ export class CursorCLIProvider implements LLMProvider {
             '--stream-partial-output',
             '--workspace',
             cwd,
-            '--trust',
           ];
+          if (self.caps.supportsTrust) {
+            args.push('--trust');
+          }
           if (mode) {
             args.push('--mode', mode);
           }
