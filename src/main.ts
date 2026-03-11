@@ -16,6 +16,7 @@ import type { LLMProvider } from 'claude-to-im/src/lib/bridge/host.js';
 import { loadConfig, configToSettings, CTI_HOME } from './config.js';
 import type { Config } from './config.js';
 import { JsonFileStore } from './store.js';
+import { IdentityMemoryStore } from './identity-memory-store.js';
 import { SDKLLMProvider, resolveClaudeCliPath, preflightCheck } from './llm-provider.js';
 import { CursorCLIProvider, resolveCursorAgentPath } from './cursor-cli-provider.js';
 import { PendingPermissions } from './permission-gateway.js';
@@ -127,7 +128,8 @@ async function main(): Promise<void> {
   console.log(`[ide-im] Starting bridge (run_id: ${runId})`);
 
   const settings = configToSettings(config);
-  const store = new JsonFileStore(settings);
+  const jsonStore = new JsonFileStore(settings);
+  const store = new IdentityMemoryStore(config.identityDir, jsonStore);
   const pendingPerms = new PendingPermissions();
   const llm = await resolveProvider(config, pendingPerms);
   console.log(`[ide-im] Runtime: ${config.runtime}`);

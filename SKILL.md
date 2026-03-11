@@ -79,7 +79,11 @@ Ask which channels to enable: telegram, discord, feishu, qq (comma-separated). B
 For each enabled channel, use `SKILL_DIR/references/setup-guides.md`. Collect:
 - **Telegram**: Bot Token → Chat ID → Allowed User IDs (optional). At least Chat ID or Allowed Users required.
 - **Discord**: Bot Token → Allowed User IDs → Allowed Channel IDs / Guild IDs (optional). At least one of Allowed Users or Allowed Channels required.
+  - **Require Mention** (`CTI_DISCORD_REQUIRE_MENTION`): set `true` to only respond when the bot is @mentioned in guild channels (default `false`).
+  - **Group Policy** (`CTI_DISCORD_GROUP_POLICY`): `open` (default, respond to guild messages) or `disabled` (completely ignore guild messages).
 - **Feishu**: App ID → App Secret → Domain (optional) → Allowed User IDs (optional). Guide through permissions, bot, events (long connection), publish.
+  - **Require Mention** (`CTI_FEISHU_REQUIRE_MENTION`): default `true` for Feishu — group messages need @mention; set `false` to respond to all messages.
+  - **Group Policy** (`CTI_FEISHU_GROUP_POLICY`): `open` (default) or `disabled` (ignore all group messages).
 - **QQ**: App ID → App Secret → Allowed User OpenIDs (optional) → Image Enabled / Max Image Size (optional). Remind: C2C only, no inline buttons.
 
 **Step 3 — General settings**
@@ -89,9 +93,21 @@ For each enabled channel, use `SKILL_DIR/references/setup-guides.md`. Collect:
   - `codex` — OpenAI Codex SDK
   - `auto` — Try Claude first, fall back to Codex
   - `cursor` — Use Cursor CLI (`agent`); install: curl https://cursor.com/install -fsS | bash
-- **Working Directory**: default `$CWD` or workspace root
+- **Working Directory**:
+  - If `CTI_DEFAULT_WORKDIR` is set in `config.env`,始终优先使用它。
+  - 如果未设置：
+    - Runtime = `cursor` 时，默认 `~/.workspace`（每个 Cursor 工程共享的全局工作区目录）。
+    - 其它 runtime（`claude` / `codex` / `auto`）保持上游行为：使用当前进程的工作目录 `$CWD`。
+- **Identity/Memory 目录**（SOUL.md、AGENTS.md、MEMORY.md 等）：
+  - 若设置 `CTI_IDENTITY_DIR` 则使用该路径。
+  - Runtime = `cursor` 且未设置时，默认使用 **skill 下的 .workspace**（`SKILL_DIR/.workspace`）；由 daemon 启动时传入 `IDE_IM_SKILL_DIR`，首次启动会从 `templates/identity-default/` 填充。会话出生时会在 system prompt 里写明「Workspace (identity root): <路径>」，和 OpenClaw 一样让 agent 知道工作区在哪。
+  - 若未通过脚本启动（无 `IDE_IM_SKILL_DIR`），则 cursor 默认回退到 `~/.workspace`。
+  - 其它 runtime 未设置时，使用各会话的 working directory 作为 identity root。
 - **Model** (optional): leave blank to use runtime default
 - **Mode**: `code`, `plan`, `ask`
+
+**Step 3b — Default identity (optional, cursor)**  
+When runtime is `cursor`, the default identity root is `~/.workspace`. To use the bundled OpenClaw-style docs: copy `SKILL_DIR/templates/identity-default/*.md` to `~/.workspace/` or to skill's `SKILL_DIR/.workspace/` (create `.workspace` and `.workspace/memory` if needed). User can then edit `USER.md`, `MEMORY.md`, and `memory/YYYY-MM-DD.md` there.
 
 **Step 4 — Write config and validate**
 

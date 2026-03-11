@@ -160,6 +160,7 @@ function Install-WinSWService {
   <env name="LOCALAPPDATA" value="$env:LOCALAPPDATA"/>
   <env name="PATH" value="$env:PATH"/>
   <env name="CTI_HOME" value="$CtiHome"/>
+  <env name="IDE_IM_SKILL_DIR" value="$SkillDir"/>
   <logpath>$(Join-Path $CtiHome 'logs')</logpath>
   <log mode="append">
     <logfile>bridge-service.log</logfile>
@@ -200,7 +201,7 @@ function Install-NSSMService {
     & $NSSMPath set $ServiceName AppStderrCreationDisposition 4
     & $NSSMPath set $ServiceName Description "Ide-IM-Skill bridge daemon"
     & $NSSMPath set $ServiceName AppRestartDelay 10000
-    & $NSSMPath set $ServiceName AppEnvironmentExtra "USERPROFILE=$env:USERPROFILE" "APPDATA=$env:APPDATA" "LOCALAPPDATA=$env:LOCALAPPDATA" "CTI_HOME=$CtiHome"
+    & $NSSMPath set $ServiceName AppEnvironmentExtra "USERPROFILE=$env:USERPROFILE" "APPDATA=$env:APPDATA" "LOCALAPPDATA=$env:LOCALAPPDATA" "CTI_HOME=$CtiHome" "IDE_IM_SKILL_DIR=$SkillDir"
 
     Write-Host "Service '$ServiceName' installed via NSSM."
     Write-Host "  Service account: $currentUser"
@@ -212,6 +213,9 @@ function Install-NSSMService {
 
 function Start-Fallback {
     $nodePath = Get-NodePath
+
+    # So daemon can default identity root to skill's workspace (cursor runtime).
+    $env:IDE_IM_SKILL_DIR = $SkillDir
 
     # Clean env
     $envClone = [System.Collections.Hashtable]::new()
@@ -240,6 +244,14 @@ switch ($Command) {
     'start' {
         Ensure-Dirs
         Ensure-Built
+
+        # Seed skill workspace with OpenClaw-style templates if missing.
+        $workspaceDir = Join-Path $SkillDir '.workspace'
+        $templatesDir = Join-Path $SkillDir 'templates' 'identity-default'
+        if (-not (Test-Path (Join-Path $workspaceDir 'AGENTS.md')) -and (Test-Path $templatesDir)) {
+            New-Item -ItemType Directory -Path (Join-Path $workspaceDir 'memory') -Force | Out-Null
+            Get-ChildItem (Join-Path $templatesDir '*.md') | Copy-Item -Destination $workspaceDir -Force
+        }
 
         $existingPid = Read-Pid
         if ($existingPid -and (Test-PidAlive $existingPid)) {

@@ -4,3 +4,6 @@ dist/
 .env
 config.env
 .cursor/mcp.json
+# Seeded from templates/identity-default; user edits stay local.
+.workspace/
+workspace/

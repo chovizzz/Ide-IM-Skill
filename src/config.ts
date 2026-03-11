@@ -17,11 +17,19 @@ export interface Config {
   feishuAppSecret?: string;
   feishuDomain?: string;
   feishuAllowedUsers?: string[];
+  /** Group messages require @mention to respond (default true for Feishu). */
+  feishuRequireMention?: boolean;
+  /** Group message policy: 'open' (default) or 'disabled'. */
+  feishuGroupPolicy?: 'open' | 'disabled';
   // Discord
   discordBotToken?: string;
   discordAllowedUsers?: string[];
   discordAllowedChannels?: string[];
   discordAllowedGuilds?: string[];
+  /** Guild messages require @mention to respond (default false). */
+  discordRequireMention?: boolean;
+  /** Guild message policy: 'open' (default) or 'disabled' (ignore all). */
+  discordGroupPolicy?: 'open' | 'disabled';
   // QQ
   qqAppId?: string;
   qqAppSecret?: string;
@@ -30,6 +38,8 @@ export interface Config {
   qqMaxImageSize?: number;
   // Auto-approve all tool permission requests without user confirmation
   autoApprove?: boolean;
+  /** Optional global identity/memory root (SOUL, AGENTS, MEMORY, etc.). Empty = use session workingDirectory. */
+  identityDir?: string;
 }
 
 export const CTI_HOME = process.env.CTI_HOME || path.join(os.homedir(), ".claude-to-im");
@@ -76,10 +86,39 @@ export function loadConfig(): Config {
   const rawRuntime = env.get("CTI_RUNTIME") || "claude";
   const runtime = (["claude", "codex", "auto", "cursor"].includes(rawRuntime) ? rawRuntime : "claude") as Config["runtime"];
 
+  // Default working directory strategy:
+  // - If CTI_DEFAULT_WORKDIR is set, always respect it.
+  // - Otherwise, choose a sensible global workspace per runtime:
+  //   - cursor: use a global workspace folder under the user's home (e.g. ~/workspace),
+  //             so different Cursor projects可以共享一个默认工作区。
+  //   - others: fall back to current process cwd (保持上游行为).
+  const envDefaultWorkDir = env.get("CTI_DEFAULT_WORKDIR");
+  const inferredDefaultWorkDir =
+    envDefaultWorkDir ||
+    (runtime === "cursor"
+      ? path.join(os.homedir(), ".workspace")
+      : process.cwd());
+
+  // Identity/memory root (SOUL.md, AGENTS.md, MEMORY.md, etc.):
+  // - If CTI_IDENTITY_DIR is set, use it.
+  // - If runtime is cursor and unset: prefer skill workspace (IDE_IM_SKILL_DIR/workspace)
+  //   so the agent's identity lives under the skill; else ~/.workspace.
+  // - Otherwise leave unset (session uses working_directory as identity root).
+  const envIdentityDir = env.get("CTI_IDENTITY_DIR")?.trim();
+  const skillWorkspace =
+    process.env.IDE_IM_SKILL_DIR
+      ? path.join(process.env.IDE_IM_SKILL_DIR, ".workspace")
+      : "";
+  const inferredIdentityDir =
+    envIdentityDir ||
+    (runtime === "cursor"
+      ? (skillWorkspace || inferredDefaultWorkDir)
+      : undefined);
+
   return {
     runtime,
     enabledChannels: splitCsv(env.get("CTI_ENABLED_CHANNELS")) ?? [],
-    defaultWorkDir: env.get("CTI_DEFAULT_WORKDIR") || process.cwd(),
+    defaultWorkDir: inferredDefaultWorkDir,
     defaultModel: env.get("CTI_DEFAULT_MODEL") || undefined,
     defaultMode: env.get("CTI_DEFAULT_MODE") || "code",
     tgBotToken: env.get("CTI_TG_BOT_TOKEN") || undefined,
@@ -89,12 +128,20 @@ export function loadConfig(): Config {
     feishuAppSecret: env.get("CTI_FEISHU_APP_SECRET") || undefined,
     feishuDomain: env.get("CTI_FEISHU_DOMAIN") || undefined,
     feishuAllowedUsers: splitCsv(env.get("CTI_FEISHU_ALLOWED_USERS")),
+    feishuRequireMention: env.has("CTI_FEISHU_REQUIRE_MENTION")
+      ? env.get("CTI_FEISHU_REQUIRE_MENTION") !== "false"
+      : undefined,
+    feishuGroupPolicy: (env.get("CTI_FEISHU_GROUP_POLICY") as Config["feishuGroupPolicy"]) || undefined,
     discordBotToken: env.get("CTI_DISCORD_BOT_TOKEN") || undefined,
     discordAllowedUsers: splitCsv(env.get("CTI_DISCORD_ALLOWED_USERS")),
     discordAllowedChannels: splitCsv(
       env.get("CTI_DISCORD_ALLOWED_CHANNELS")
     ),
     discordAllowedGuilds: splitCsv(env.get("CTI_DISCORD_ALLOWED_GUILDS")),
+    discordRequireMention: env.has("CTI_DISCORD_REQUIRE_MENTION")
+      ? env.get("CTI_DISCORD_REQUIRE_MENTION") === "true"
+      : undefined,
+    discordGroupPolicy: (env.get("CTI_DISCORD_GROUP_POLICY") as Config["discordGroupPolicy"]) || undefined,
     qqAppId: env.get("CTI_QQ_APP_ID") || undefined,
     qqAppSecret: env.get("CTI_QQ_APP_SECRET") || undefined,
     qqAllowedUsers: splitCsv(env.get("CTI_QQ_ALLOWED_USERS")),
@@ -105,6 +152,7 @@ export function loadConfig(): Config {
       ? Number(env.get("CTI_QQ_MAX_IMAGE_SIZE"))
       : undefined,
     autoApprove: env.get("CTI_AUTO_APPROVE") === "true",
+    identityDir: inferredIdentityDir || undefined,
   };
 }
 
@@ -136,6 +184,10 @@ export function saveConfig(config: Config): void {
     "CTI_FEISHU_ALLOWED_USERS",
     config.feishuAllowedUsers?.join(",")
   );
+  if (config.feishuRequireMention !== undefined)
+    out += formatEnvLine("CTI_FEISHU_REQUIRE_MENTION", String(config.feishuRequireMention));
+  if (config.feishuGroupPolicy)
+    out += formatEnvLine("CTI_FEISHU_GROUP_POLICY", config.feishuGroupPolicy);
   out += formatEnvLine("CTI_DISCORD_BOT_TOKEN", config.discordBotToken);
   out += formatEnvLine(
     "CTI_DISCORD_ALLOWED_USERS",
@@ -149,6 +201,10 @@ export function saveConfig(config: Config): void {
     "CTI_DISCORD_ALLOWED_GUILDS",
     config.discordAllowedGuilds?.join(",")
   );
+  if (config.discordRequireMention !== undefined)
+    out += formatEnvLine("CTI_DISCORD_REQUIRE_MENTION", String(config.discordRequireMention));
+  if (config.discordGroupPolicy)
+    out += formatEnvLine("CTI_DISCORD_GROUP_POLICY", config.discordGroupPolicy);
   out += formatEnvLine("CTI_QQ_APP_ID", config.qqAppId);
   out += formatEnvLine("CTI_QQ_APP_SECRET", config.qqAppSecret);
   out += formatEnvLine(
@@ -159,6 +215,7 @@ export function saveConfig(config: Config): void {
     out += formatEnvLine("CTI_QQ_IMAGE_ENABLED", String(config.qqImageEnabled));
   if (config.qqMaxImageSize !== undefined)
     out += formatEnvLine("CTI_QQ_MAX_IMAGE_SIZE", String(config.qqMaxImageSize));
+  if (config.identityDir) out += formatEnvLine("CTI_IDENTITY_DIR", config.identityDir);
 
   fs.mkdirSync(CTI_HOME, { recursive: true });
   const tmpPath = CONFIG_PATH + ".tmp";
@@ -209,6 +266,10 @@ export function configToSettings(config: Config): Map<string, string> {
       "bridge_discord_allowed_guilds",
       config.discordAllowedGuilds.join(",")
     );
+  if (config.discordRequireMention !== undefined)
+    m.set("bridge_discord_require_mention", String(config.discordRequireMention));
+  if (config.discordGroupPolicy)
+    m.set("bridge_discord_group_policy", config.discordGroupPolicy);
 
   // ── Feishu ──
   // Upstream keys: bridge_feishu_app_id, bridge_feishu_app_secret,
@@ -223,6 +284,10 @@ export function configToSettings(config: Config): Map<string, string> {
   if (config.feishuDomain) m.set("bridge_feishu_domain", config.feishuDomain);
   if (config.feishuAllowedUsers)
     m.set("bridge_feishu_allowed_users", config.feishuAllowedUsers.join(","));
+  if (config.feishuRequireMention !== undefined)
+    m.set("bridge_feishu_require_mention", String(config.feishuRequireMention));
+  if (config.feishuGroupPolicy)
+    m.set("bridge_feishu_group_policy", config.feishuGroupPolicy);
 
   // ── QQ ──
   // Upstream keys: bridge_qq_enabled, bridge_qq_app_id, bridge_qq_app_secret,

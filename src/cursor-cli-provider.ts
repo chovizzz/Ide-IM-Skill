@@ -78,9 +78,15 @@ export class CursorCLIProvider implements LLMProvider {
         (async () => {
           const cwd = params.workingDirectory || process.cwd();
           const mode = toCursorMode(params.permissionMode);
+          // Bridge passes session system_prompt (identity/memory from AGENTS.md, SOUL.md, etc.).
+          // Cursor CLI has no --system-prompt; prepend so the agent sees instructions first.
+          const promptText =
+            params.systemPrompt && params.systemPrompt.trim()
+              ? `${params.systemPrompt.trim()}\n\n---\n\n**User:**\n\n${params.prompt}`
+              : params.prompt;
           const args = [
             '-p',
-            params.prompt,
+            promptText,
             '--output-format',
             'stream-json',
             '--stream-partial-output',

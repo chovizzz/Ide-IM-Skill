@@ -14,8 +14,8 @@ build_env_dict() {
   local indent="            "
   local dict=""
 
-  # Always forward basics
-  for var in HOME PATH USER SHELL LANG TMPDIR; do
+  # Always forward basics (IDE_IM_SKILL_DIR so daemon can use skill's workspace as identity root)
+  for var in HOME PATH USER SHELL LANG TMPDIR IDE_IM_SKILL_DIR; do
     local val="${!var:-}"
     [ -z "$val" ] && continue
     dict+="${indent}<key>${var}</key>\n${indent}<string>${val}</string>\n"
