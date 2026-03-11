@@ -135,8 +135,21 @@ After the user picks a runtime, **check whether the required CLI exists** and au
 - **Model** (optional): leave blank to use runtime default
 - **Mode**: `code`, `plan`, `ask`
 
-**Step 3b — Default identity (optional, cursor)**  
-When runtime is `cursor`, the default identity root is `~/.workspace`. To use the bundled OpenClaw-style docs: copy `SKILL_DIR/templates/identity-default/*.md` to `~/.workspace/` or to skill's `SKILL_DIR/.workspace/` (create `.workspace` and `.workspace/memory` if needed). User can then edit `USER.md`, `MEMORY.md`, and `memory/YYYY-MM-DD.md` there.
+**Step 3b — Workspace & identity initialisation (auto, immediately after CLI check)**
+
+After CLI is verified, **automatically** create workspace directories and seed identity templates.
+
+Run: `bash "SKILL_DIR/scripts/init-workspace.sh" <runtime>`
+
+This creates:
+1. **CTI_HOME** dirs (`~/.claude-to-im/{data,logs,runtime,data/messages}`)
+2. **Working directory** (`~/.workspace` for cursor, `$CWD` for others)
+3. **Identity directory** (cursor only: `SKILL_DIR/.workspace/` + `memory/`) — seeds OpenClaw templates (`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `MEMORY.md`) from `templates/identity-default/` if not already present
+
+If the user set custom `CTI_DEFAULT_WORKDIR` or `CTI_IDENTITY_DIR`, pass them:  
+`bash "SKILL_DIR/scripts/init-workspace.sh" <runtime> --work-dir <path> --identity-dir <path>`
+
+After init, remind the user they can personalise `USER.md` and `MEMORY.md` in the identity directory.
 
 **Step 4 — Write config and validate**
 
