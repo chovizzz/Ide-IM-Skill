@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.js",
+    "postinstall": "node scripts/patch-upstream.js",
     "typecheck": "tsc --noEmit",
     "dev": "tsx src/main.ts",
     "test": "CTI_HOME=$(mktemp -d) node --test --import tsx --test-timeout=15000 --test-concurrency=1 src/__tests__/*.test.ts"
