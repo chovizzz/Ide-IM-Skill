@@ -133,14 +133,17 @@ export class CursorCLIProvider implements LLMProvider {
           });
 
           let stderrBuf = '';
-          // Cursor CLI with --stream-partial-output sends assistant events with
-          // CUMULATIVE text (each event has the full text so far, not just the
-          // delta). Track previously emitted text to only emit the actual delta.
-          let prevAssistantText = '';
 
           proc.stderr?.on('data', (chunk: Buffer) => {
             stderrBuf += chunk.toString();
           });
+
+          // Cursor CLI --stream-partial-output emits assistant events as TRUE deltas
+          // (each event has only the new text fragment), EXCEPT the very last assistant
+          // event before `result` which duplicates the full accumulated text.
+          // We accumulate emitted text and skip any event whose content equals the
+          // already-accumulated total (the final duplicate).
+          let accumulatedText = '';
 
           proc.stdout?.on('data', (chunk: Buffer) => {
             const lines = chunk.toString().split('\n').filter((l: string) => l.trim());
@@ -151,22 +154,32 @@ export class CursorCLIProvider implements LLMProvider {
                 if (type === 'assistant') {
                   const msg = event.message as { content?: Array<{ type?: string; text?: string }> };
                   const content = msg?.content ?? [];
-                  const fullText = content
+                  const fragment = content
                     .filter(b => b?.type === 'text' && typeof b.text === 'string')
                     .map(b => b!.text!)
                     .join('');
 
-                  if (fullText && fullText !== prevAssistantText) {
-                    if (fullText.startsWith(prevAssistantText)) {
-                      const delta = fullText.slice(prevAssistantText.length);
-                      if (delta) controller.enqueue(sseEvent('text', delta));
-                    } else {
-                      controller.enqueue(sseEvent('text', fullText));
+                  if (!fragment) continue;
+
+                  // Skip if this event is just the full accumulated text repeated
+                  if (fragment === accumulatedText) continue;
+
+                  // If it starts with what we've accumulated, it's a "full text" duplicate
+                  // — emit only the new suffix
+                  if (fragment.startsWith(accumulatedText) && accumulatedText.length > 0) {
+                    const delta = fragment.slice(accumulatedText.length);
+                    if (delta) {
+                      accumulatedText = fragment;
+                      controller.enqueue(sseEvent('text', delta));
                     }
-                    prevAssistantText = fullText;
+                    continue;
                   }
+
+                  // Normal delta: emit as-is and append
+                  accumulatedText += fragment;
+                  controller.enqueue(sseEvent('text', fragment));
                 } else if (type === 'tool_call') {
-                  prevAssistantText = '';
+                  accumulatedText = '';
                   const subtype = event.subtype as string;
                   const callId = (event.call_id as string) || `cursor-${Date.now()}`;
                   const toolCall = event.tool_call as Record<string, unknown>;
