@@ -30,6 +30,8 @@ export interface Config {
   discordRequireMention?: boolean;
   /** Guild message policy: 'open' (default) or 'disabled' (ignore all). */
   discordGroupPolicy?: 'open' | 'disabled';
+  /** Allow other bots' messages to trigger responses (default false). */
+  discordAllowBotMessages?: boolean;
   // QQ
   qqAppId?: string;
   qqAppSecret?: string;
@@ -138,6 +140,9 @@ export function loadConfig(): Config {
       env.get("CTI_DISCORD_ALLOWED_CHANNELS")
     ),
     discordAllowedGuilds: splitCsv(env.get("CTI_DISCORD_ALLOWED_GUILDS")),
+    discordAllowBotMessages: env.has("CTI_DISCORD_ALLOW_BOT_MESSAGES")
+      ? env.get("CTI_DISCORD_ALLOW_BOT_MESSAGES") === "true"
+      : undefined,
     discordRequireMention: env.has("CTI_DISCORD_REQUIRE_MENTION")
       ? env.get("CTI_DISCORD_REQUIRE_MENTION") === "true"
       : undefined,
@@ -201,6 +206,8 @@ export function saveConfig(config: Config): void {
     "CTI_DISCORD_ALLOWED_GUILDS",
     config.discordAllowedGuilds?.join(",")
   );
+  if (config.discordAllowBotMessages !== undefined)
+    out += formatEnvLine("CTI_DISCORD_ALLOW_BOT_MESSAGES", String(config.discordAllowBotMessages));
   if (config.discordRequireMention !== undefined)
     out += formatEnvLine("CTI_DISCORD_REQUIRE_MENTION", String(config.discordRequireMention));
   if (config.discordGroupPolicy)
@@ -270,6 +277,10 @@ export function configToSettings(config: Config): Map<string, string> {
     m.set("bridge_discord_require_mention", String(config.discordRequireMention));
   if (config.discordGroupPolicy)
     m.set("bridge_discord_group_policy", config.discordGroupPolicy);
+  if (config.discordAllowBotMessages !== undefined)
+    m.set("bridge_discord_allow_bot_messages", String(config.discordAllowBotMessages));
+  // Disable streaming preview to prevent duplicate messages (preview + final)
+  m.set("bridge_discord_stream_enabled", "false");
 
   // ── Feishu ──
   // Upstream keys: bridge_feishu_app_id, bridge_feishu_app_secret,
