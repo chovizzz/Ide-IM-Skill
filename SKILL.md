@@ -130,8 +130,7 @@ After the user picks a runtime, **check whether the required CLI exists** and au
     - 其它 runtime（`claude` / `codex` / `auto`）保持上游行为：使用当前进程的工作目录 `$CWD`。
 - **Identity/Memory 目录**（SOUL.md、AGENTS.md、MEMORY.md 等）：
   - 若设置 `CTI_IDENTITY_DIR` 则使用该路径。
-  - Runtime = `cursor` 且未设置时，默认使用 **skill 下的 .workspace**（`SKILL_DIR/.workspace`）；由 daemon 启动时传入 `IDE_IM_SKILL_DIR`，首次启动会从 `templates/identity-default/` 填充。会话出生时会在 system prompt 里写明「Workspace (identity root): <路径>」，和 OpenClaw 一样让 agent 知道工作区在哪。
-  - 若未通过脚本启动（无 `IDE_IM_SKILL_DIR`），则 cursor 默认回退到 `~/.workspace`。
+  - Runtime = `cursor` 且未设置时，默认使用 **`~/.workspace`**；首次启动会从 `templates/identity-default/` 自动填充。会话出生时会在 system prompt 里写明「Workspace (identity root): <路径>」，和 OpenClaw 一样让 agent 知道工作区在哪。
   - 其它 runtime 未设置时，使用各会话的 working directory 作为 identity root。
 - **Model** (optional): leave blank to use runtime default
 - **Mode**: `code`, `plan`, `ask`
@@ -145,7 +144,7 @@ Run: `bash "SKILL_DIR/scripts/init-workspace.sh" <runtime>`
 This creates:
 1. **CTI_HOME** dirs (`~/.ide-im/{data,logs,runtime,data/messages}`)
 2. **Working directory** (`~/.workspace` for cursor, `$CWD` for others)
-3. **Identity directory** (cursor only: `SKILL_DIR/.workspace/` + `memory/`) — seeds OpenClaw templates (`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `MEMORY.md`) from `templates/identity-default/` if not already present
+3. **Identity directory** (cursor only: `~/.workspace/` + `memory/`) — seeds OpenClaw templates (`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `MEMORY.md`) from `templates/identity-default/` if not already present
 
 If the user set custom `CTI_DEFAULT_WORKDIR` or `CTI_IDENTITY_DIR`, pass them:  
 `bash "SKILL_DIR/scripts/init-workspace.sh" <runtime> --work-dir <path> --identity-dir <path>`

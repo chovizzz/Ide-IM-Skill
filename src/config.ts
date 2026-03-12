@@ -105,18 +105,14 @@ export function loadConfig(): Config {
 
   // Identity/memory root (SOUL.md, AGENTS.md, MEMORY.md, etc.):
   // - If CTI_IDENTITY_DIR is set, use it.
-  // - If runtime is cursor and unset: prefer skill workspace (IDE_IM_SKILL_DIR/workspace)
-  //   so the agent's identity lives under the skill; else ~/.workspace.
+  // - If runtime is cursor and unset: default to ~/.workspace (same as default work dir).
+  //   This ensures the agent has write access (skill dir may be read-only).
   // - Otherwise leave unset (session uses working_directory as identity root).
   const envIdentityDir = env.get("CTI_IDENTITY_DIR")?.trim();
-  const skillWorkspace =
-    process.env.IDE_IM_SKILL_DIR
-      ? path.join(process.env.IDE_IM_SKILL_DIR, ".workspace")
-      : "";
   const inferredIdentityDir =
     envIdentityDir ||
     (runtime === "cursor"
-      ? (skillWorkspace || inferredDefaultWorkDir)
+      ? inferredDefaultWorkDir
       : undefined);
 
   return {

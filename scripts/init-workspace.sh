@@ -6,7 +6,7 @@
 # Usage: init-workspace.sh <runtime> [--identity-dir <path>] [--work-dir <path>]
 #
 # Defaults (when flags are omitted):
-#   cursor  → workDir=~/.workspace, identityDir=SKILL_DIR/.workspace
+#   cursor  → workDir=~/.workspace, identityDir=~/.workspace
 #   others  → workDir=$PWD,         identityDir=(skip)
 #
 # What it creates:
@@ -43,7 +43,7 @@ fi
 
 if [ -z "$IDENTITY_DIR" ]; then
   case "$RUNTIME" in
-    cursor) IDENTITY_DIR="$SKILL_DIR/.workspace" ;;
+    cursor) IDENTITY_DIR="$HOME/.workspace" ;;
   esac
 fi
 

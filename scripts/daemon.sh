@@ -133,12 +133,13 @@ case "${1:-help}" in
     ensure_deps
     ensure_built
 
-    # So the daemon can default identity root to skill's workspace (cursor runtime).
     export IDE_IM_SKILL_DIR="$SKILL_DIR"
-    # Seed skill workspace with OpenClaw-style templates if missing (so agent has identity from first run).
-    if [ ! -f "$SKILL_DIR/.workspace/AGENTS.md" ] && [ -d "$SKILL_DIR/templates/identity-default" ]; then
-      mkdir -p "$SKILL_DIR/.workspace/memory"
-      cp "$SKILL_DIR"/templates/identity-default/*.md "$SKILL_DIR/.workspace/" 2>/dev/null || true
+    # Seed ~/.workspace with OpenClaw-style identity templates if missing.
+    # Using ~ instead of SKILL_DIR ensures the agent has write access.
+    IDENTITY_DIR="$HOME/.workspace"
+    if [ ! -f "$IDENTITY_DIR/AGENTS.md" ] && [ -d "$SKILL_DIR/templates/identity-default" ]; then
+      mkdir -p "$IDENTITY_DIR/memory"
+      cp "$SKILL_DIR"/templates/identity-default/*.md "$IDENTITY_DIR/" 2>/dev/null || true
     fi
 
     # Check if already running (supervisor-aware: launchctl on macOS, PID on Linux)

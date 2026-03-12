@@ -6,7 +6,7 @@ Ide-IM-Skill can load **identity** and **memory** from Markdown files and inject
 
 - **identity_root** is the directory from which the bridge reads the files below. The composed system prompt **includes a "Workspace (identity root)" section** with the absolute path, so the agent knows where to read and update identity/memory files (like OpenClaw).
 - If **CTI_IDENTITY_DIR** is set in `config.env`, all sessions use that directory.
-- If **CTI_RUNTIME=cursor** and not set: default is **skill's workspace** (`IDE_IM_SKILL_DIR/.workspace`). On first start the daemon seeds it from `templates/identity-default/` if missing.
+- If **CTI_RUNTIME=cursor** and not set: default is **`~/.workspace`**. On first start the daemon seeds it from `templates/identity-default/` if missing.
 - If not set, each session uses its **working directory** (default workdir or the binding’s cwd).
 
 Place the files either:
@@ -45,7 +45,7 @@ Each block is wrapped in a `## Title` section so the model can tell identity fro
 
 ## Default templates (bundled)
 
-When **CTI_RUNTIME=cursor** and identity root is **~/.workspace**, the skill ships default OpenClaw-style files. Copy from the repo if your identity root is empty:
+When **CTI_RUNTIME=cursor**, the default identity root is **`~/.workspace`**. The daemon auto-seeds OpenClaw-style templates on first start. You can also copy them manually:
 
 ```bash
 cp SKILL_DIR/templates/identity-default/*.md ~/.workspace/

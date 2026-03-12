@@ -256,8 +256,8 @@ switch ($Command) {
         Ensure-Deps
         Ensure-Built
 
-        # Seed skill workspace with OpenClaw-style templates if missing.
-        $workspaceDir = Join-Path $SkillDir '.workspace'
+        # Seed ~/.workspace with OpenClaw-style identity templates if missing.
+        $workspaceDir = Join-Path $env:USERPROFILE '.workspace'
         $templatesDir = Join-Path $SkillDir 'templates' 'identity-default'
         if (-not (Test-Path (Join-Path $workspaceDir 'AGENTS.md')) -and (Test-Path $templatesDir)) {
             New-Item -ItemType Directory -Path (Join-Path $workspaceDir 'memory') -Force | Out-Null
