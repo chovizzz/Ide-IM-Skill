@@ -128,6 +128,11 @@ export class CursorCLIProvider implements LLMProvider {
           });
 
           let stderrBuf = '';
+          // Cursor CLI with --stream-partial-output sends assistant events with
+          // CUMULATIVE text (each event has the full text so far, not just the
+          // delta). Track previously emitted text to only emit the actual delta.
+          let prevAssistantText = '';
+
           proc.stderr?.on('data', (chunk: Buffer) => {
             stderrBuf += chunk.toString();
           });
@@ -141,12 +146,22 @@ export class CursorCLIProvider implements LLMProvider {
                 if (type === 'assistant') {
                   const msg = event.message as { content?: Array<{ type?: string; text?: string }> };
                   const content = msg?.content ?? [];
-                  for (const block of content) {
-                    if (block?.type === 'text' && typeof block.text === 'string' && block.text) {
-                      controller.enqueue(sseEvent('text', block.text));
+                  const fullText = content
+                    .filter(b => b?.type === 'text' && typeof b.text === 'string')
+                    .map(b => b!.text!)
+                    .join('');
+
+                  if (fullText && fullText !== prevAssistantText) {
+                    if (fullText.startsWith(prevAssistantText)) {
+                      const delta = fullText.slice(prevAssistantText.length);
+                      if (delta) controller.enqueue(sseEvent('text', delta));
+                    } else {
+                      controller.enqueue(sseEvent('text', fullText));
                     }
+                    prevAssistantText = fullText;
                   }
                 } else if (type === 'tool_call') {
+                  prevAssistantText = '';
                   const subtype = event.subtype as string;
                   const callId = (event.call_id as string) || `cursor-${Date.now()}`;
                   const toolCall = event.tool_call as Record<string, unknown>;
