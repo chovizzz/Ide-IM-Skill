@@ -55,15 +55,16 @@ export function resolveCursorAgentPath(): string | null {
 }
 
 /** Probe `agent --help` once to discover supported flags. */
-function detectCapabilities(agentPath: string): { supportsTrust: boolean; supportsForce: boolean } {
+function detectCapabilities(agentPath: string): { supportsTrust: boolean; supportsForce: boolean; supportsSandbox: boolean } {
   try {
     const help = execSync(`"${agentPath}" --help`, { encoding: 'utf-8', timeout: 5000 });
     return {
       supportsTrust: help.includes('--trust'),
       supportsForce: help.includes('--force'),
+      supportsSandbox: help.includes('--sandbox'),
     };
   } catch {
-    return { supportsTrust: false, supportsForce: false };
+    return { supportsTrust: false, supportsForce: false, supportsSandbox: false };
   }
 }
 
@@ -77,14 +78,14 @@ function toCursorMode(permissionMode?: string): string | undefined {
 }
 
 export class CursorCLIProvider implements LLMProvider {
-  private caps: { supportsTrust: boolean; supportsForce: boolean };
+  private caps: { supportsTrust: boolean; supportsForce: boolean; supportsSandbox: boolean };
 
   constructor(
     private _pendingPerms: PendingPermissions,
     private agentPath: string,
   ) {
     this.caps = detectCapabilities(agentPath);
-    console.log(`[ide-im] Cursor CLI capabilities: trust=${this.caps.supportsTrust}, force=${this.caps.supportsForce}`);
+    console.log(`[ide-im] Cursor CLI capabilities: trust=${this.caps.supportsTrust}, force=${this.caps.supportsForce}, sandbox=${this.caps.supportsSandbox}`);
   }
 
   streamChat(params: StreamChatParams): ReadableStream<string> {
@@ -113,6 +114,10 @@ export class CursorCLIProvider implements LLMProvider {
           ];
           if (self.caps.supportsTrust) {
             args.push('--trust');
+          }
+          const sandboxMode = process.env.CTI_CURSOR_SANDBOX;
+          if (self.caps.supportsSandbox && sandboxMode && (sandboxMode === 'enabled' || sandboxMode === 'disabled')) {
+            args.push('--sandbox', sandboxMode);
           }
           if (mode) {
             args.push('--mode', mode);

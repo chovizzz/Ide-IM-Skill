@@ -40,6 +40,8 @@ export interface Config {
   qqMaxImageSize?: number;
   // Auto-approve all tool permission requests without user confirmation
   autoApprove?: boolean;
+  /** Cursor CLI sandbox mode: 'enabled' | 'disabled' | undefined (use CLI default). */
+  cursorSandbox?: 'enabled' | 'disabled';
   /** Optional global identity/memory root (SOUL, AGENTS, MEMORY, etc.). Empty = use session workingDirectory. */
   identityDir?: string;
 }
@@ -157,6 +159,7 @@ export function loadConfig(): Config {
       ? Number(env.get("CTI_QQ_MAX_IMAGE_SIZE"))
       : undefined,
     autoApprove: env.get("CTI_AUTO_APPROVE") === "true",
+    cursorSandbox: (env.get("CTI_CURSOR_SANDBOX") as Config["cursorSandbox"]) || undefined,
     identityDir: inferredIdentityDir || undefined,
   };
 }
@@ -222,6 +225,7 @@ export function saveConfig(config: Config): void {
     out += formatEnvLine("CTI_QQ_IMAGE_ENABLED", String(config.qqImageEnabled));
   if (config.qqMaxImageSize !== undefined)
     out += formatEnvLine("CTI_QQ_MAX_IMAGE_SIZE", String(config.qqMaxImageSize));
+  if (config.cursorSandbox) out += formatEnvLine("CTI_CURSOR_SANDBOX", config.cursorSandbox);
   if (config.identityDir) out += formatEnvLine("CTI_IDENTITY_DIR", config.identityDir);
 
   fs.mkdirSync(CTI_HOME, { recursive: true });
