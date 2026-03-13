@@ -303,6 +303,15 @@ export class JsonFileStore implements BridgeStore {
     return { messages: [...msgs] };
   }
 
+  /** Keep only the last N messages (compress session after memory offload). */
+  truncateSessionMessages(sessionId: string, keepLast: number): void {
+    const msgs = this.loadMessages(sessionId);
+    if (msgs.length <= keepLast) return;
+    const next = msgs.slice(-keepLast);
+    this.messages.set(sessionId, next);
+    this.persistMessages(sessionId);
+  }
+
   // ── Session Locking ──
 
   acquireSessionLock(sessionId: string, lockId: string, owner: string, ttlSecs: number): boolean {

@@ -133,6 +133,13 @@ export class IdentityMemoryStore implements BridgeStore {
   addMessage(sessionId: string, role: string, content: string, usage?: string | null): void {
     this.inner.addMessage(sessionId, role, content, usage);
   }
+  /** Forward to JsonFileStore when present (memory compression). */
+  truncateSessionMessages(sessionId: string, keepLast: number): void {
+    const j = this.inner as { truncateSessionMessages?: (s: string, k: number) => void };
+    if (typeof j.truncateSessionMessages === 'function') {
+      j.truncateSessionMessages(sessionId, keepLast);
+    }
+  }
   getMessages(sessionId: string, opts?: { limit?: number }): { messages: BridgeMessage[] } {
     return this.inner.getMessages(sessionId, opts);
   }

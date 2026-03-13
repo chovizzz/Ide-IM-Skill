@@ -44,6 +44,12 @@ export interface Config {
   cursorSandbox?: 'enabled' | 'disabled';
   /** Optional global identity/memory root (SOUL, AGENTS, MEMORY, etc.). Empty = use session workingDirectory. */
   identityDir?: string;
+  /** When session message count reaches this, summarize to MEMORY.md and truncate (0 = off). */
+  memoryCompressAfterMessages?: number;
+  /** Messages to keep in store after compress (default 4). */
+  memoryKeepAfterCompress?: number;
+  /** Discord stream partial replies (default true; set false if duplicates). */
+  discordStreamEnabled?: boolean;
 }
 
 export const CTI_HOME = process.env.CTI_HOME || path.join(os.homedir(), ".ide-im");
@@ -157,6 +163,15 @@ export function loadConfig(): Config {
     autoApprove: env.get("CTI_AUTO_APPROVE") === "true",
     cursorSandbox: (env.get("CTI_CURSOR_SANDBOX") as Config["cursorSandbox"]) || undefined,
     identityDir: inferredIdentityDir || undefined,
+    memoryCompressAfterMessages: env.has("CTI_MEMORY_COMPRESS_AFTER_MESSAGES")
+      ? Math.max(0, parseInt(env.get("CTI_MEMORY_COMPRESS_AFTER_MESSAGES") || "0", 10) || 0)
+      : 24,
+    memoryKeepAfterCompress: env.has("CTI_MEMORY_KEEP_AFTER_COMPRESS")
+      ? Math.max(0, parseInt(env.get("CTI_MEMORY_KEEP_AFTER_COMPRESS") || "4", 10) || 4)
+      : 4,
+    discordStreamEnabled: env.has("CTI_DISCORD_STREAM_ENABLED")
+      ? env.get("CTI_DISCORD_STREAM_ENABLED") === "true"
+      : true,
   };
 }
 
@@ -223,6 +238,12 @@ export function saveConfig(config: Config): void {
     out += formatEnvLine("CTI_QQ_MAX_IMAGE_SIZE", String(config.qqMaxImageSize));
   if (config.cursorSandbox) out += formatEnvLine("CTI_CURSOR_SANDBOX", config.cursorSandbox);
   if (config.identityDir) out += formatEnvLine("CTI_IDENTITY_DIR", config.identityDir);
+  if (config.memoryCompressAfterMessages !== undefined)
+    out += formatEnvLine("CTI_MEMORY_COMPRESS_AFTER_MESSAGES", String(config.memoryCompressAfterMessages));
+  if (config.memoryKeepAfterCompress !== undefined)
+    out += formatEnvLine("CTI_MEMORY_KEEP_AFTER_COMPRESS", String(config.memoryKeepAfterCompress));
+  if (config.discordStreamEnabled !== undefined)
+    out += formatEnvLine("CTI_DISCORD_STREAM_ENABLED", String(config.discordStreamEnabled));
 
   fs.mkdirSync(CTI_HOME, { recursive: true });
   const tmpPath = CONFIG_PATH + ".tmp";
@@ -279,8 +300,10 @@ export function configToSettings(config: Config): Map<string, string> {
     m.set("bridge_discord_group_policy", config.discordGroupPolicy);
   if (config.discordAllowBotMessages !== undefined)
     m.set("bridge_discord_allow_bot_messages", String(config.discordAllowBotMessages));
-  // Disable streaming preview to prevent duplicate messages (preview + final)
-  m.set("bridge_discord_stream_enabled", "false");
+  m.set(
+    "bridge_discord_stream_enabled",
+    config.discordStreamEnabled !== false ? "true" : "false",
+  );
 
   // ── Feishu ──
   // Upstream keys: bridge_feishu_app_id, bridge_feishu_app_secret,

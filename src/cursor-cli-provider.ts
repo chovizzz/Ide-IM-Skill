@@ -17,6 +17,14 @@ import { sseEvent } from './sse-utils.js';
 
 const CURSOR_AGENT_ENV = process.env.CTI_CURSOR_AGENT_EXECUTABLE;
 
+/** Max conversation history messages to include in prompt (0 = none). Default 20 (~10 turns) to balance context vs tokens. */
+function getMaxHistoryMessages(): number {
+  const raw = process.env.CTI_CURSOR_MAX_HISTORY_MESSAGES;
+  if (raw === undefined || raw === '') return 20;
+  const n = parseInt(raw, 10);
+  return Number.isNaN(n) || n < 0 ? 20 : n;
+}
+
 /**
  * Resolve path to Cursor Agent CLI.
  * Tries: CTI_CURSOR_AGENT_EXECUTABLE, then `agent` and `cursor` in PATH, then common locations.
@@ -97,12 +105,25 @@ export class CursorCLIProvider implements LLMProvider {
         (async () => {
           const cwd = params.workingDirectory || process.cwd();
           const mode = toCursorMode(params.permissionMode);
+          // Build conversation body: include recent history only to limit token use (configurable via CTI_CURSOR_MAX_HISTORY_MESSAGES).
+          const maxHistory = getMaxHistoryMessages();
+          const rawHistory = params.conversationHistory ?? [];
+          const history = maxHistory > 0 && rawHistory.length > 0
+            ? rawHistory.slice(-maxHistory)
+            : [];
+          const historyBlock = history.length > 0
+            ? history
+                .map((m) => (m.role === 'user' ? `**User:**\n\n${m.content}` : `**Assistant:**\n\n${m.content}`))
+                .join('\n\n')
+            : '';
+          const currentTurn = `**User:**\n\n${params.prompt}`;
+          const conversationBody = historyBlock ? `${historyBlock}\n\n${currentTurn}` : currentTurn;
           // Bridge passes session system_prompt (identity/memory from AGENTS.md, SOUL.md, etc.).
           // Cursor CLI has no --system-prompt; prepend so the agent sees instructions first.
           const promptText =
             params.systemPrompt && params.systemPrompt.trim()
-              ? `${params.systemPrompt.trim()}\n\n---\n\n**User:**\n\n${params.prompt}`
-              : params.prompt;
+              ? `${params.systemPrompt.trim()}\n\n---\n\n${conversationBody}`
+              : conversationBody;
           const args = [
             '-p',
             promptText,

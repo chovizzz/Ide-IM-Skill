@@ -151,6 +151,11 @@ If the user set custom `CTI_DEFAULT_WORKDIR` or `CTI_IDENTITY_DIR`, pass them:
 
 After init, remind the user they can personalise `USER.md` and `MEMORY.md` in the identity directory.
 
+**Long session memory + Discord streaming (optional)**
+
+- **`CTI_MEMORY_COMPRESS_AFTER_MESSAGES`** (default `24`): when the bridge has stored this many messages for a channel session, it runs a **background** summarization into `MEMORY.md` under the identity dir, then **truncates** stored messages to `CTI_MEMORY_KEEP_AFTER_COMPRESS` (default `4`). The next user turn still sees long-term facts via the normal **MEMORY.md** injection in system prompt. Set to **`0`** to disable.
+- **`CTI_DISCORD_STREAM_ENABLED`** (default `true`): Discord **streams** partial replies while the model runs. Set `false` if you ever see duplicate final messages.
+
 **Step 4 — Write config and validate**
 
 1. Summary table (secrets masked).
